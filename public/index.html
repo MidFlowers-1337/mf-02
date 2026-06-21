@@ -12,6 +12,7 @@
       <h1>📚 自习室工位预约</h1>
       <div class="user-info" id="userInfo" style="display: none;">
         <span id="username"></span>
+        <a href="/admin.html" id="adminLink" class="btn btn-secondary" style="display: none;">老板后台</a>
         <button class="btn btn-secondary" onclick="logout()">退出</button>
       </div>
     </div>
@@ -144,8 +145,17 @@
       container.innerHTML = '';
       const now = new Date();
       const today = formatDate(now);
+      const nowHour = now.getHours();
+      const nowMin = now.getMinutes();
       for (let h = 8; h <= 21; h++) {
-        const isPast = currentDate === today && h <= now.getHours();
+        let isPast = false;
+        if (currentDate === today) {
+          if (h < nowHour) {
+            isPast = true;
+          } else if (h === nowHour && nowMin > 45) {
+            isPast = true;
+          }
+        }
         const div = document.createElement('div');
         div.className = `hour-slot${isPast ? ' past' : ''}${selectedHour === h ? ' selected' : ''}`;
         div.textContent = `${h}:00-${h + 1}:00`;
@@ -160,6 +170,7 @@
       selectedHour = h;
       renderHourSlots();
       if (currentDate) loadSeats();
+      updateBookBtn();
     }
 
     async function loadSeats() {
@@ -231,6 +242,21 @@
       return map[status] || { text: status, cls: '' };
     }
 
+    function getCheckinStatus(b) {
+      const startTs = new Date(b.booking_date + 'T' + String(b.hour_slot).padStart(2, '0') + ':00:00').getTime();
+      const now = Date.now();
+      const earlyStart = startTs - 5 * 60 * 1000;
+      const graceEnd = startTs + 15 * 60 * 1000;
+      if (now < earlyStart) {
+        const mins = Math.ceil((earlyStart - now) / 60000);
+        return { canCheckin: false, label: `${mins}分钟后可签到`, cls: 'status-reserved' };
+      } else if (now <= graceEnd) {
+        return { canCheckin: true, label: '可签到', cls: 'status-checked-in' };
+      } else {
+        return { canCheckin: false, label: '已超时', cls: 'status-no-show' };
+      }
+    }
+
     async function loadBookings() {
       try {
         const bookings = await api.bookings.list();
@@ -245,12 +271,16 @@
           const item = document.createElement('div');
           item.className = 'booking-item';
           let actions = '';
+          let statusTip = '';
           if (b.status === 'reserved') {
+            const ci = getCheckinStatus(b);
+            statusTip = `<span class="status ${ci.cls}" style="margin-right:8px;">${ci.label}</span>`;
             actions = `
-              <button class="btn btn-success" onclick="doCheckin(${b.id})">签到</button>
+              <button class="btn btn-success" onclick="doCheckin(${b.id})" ${ci.canCheckin ? '' : 'disabled'}>签到</button>
               <button class="btn btn-secondary" onclick="doCancel(${b.id})">取消</button>
             `;
           } else if (b.status === 'checked-in') {
+            statusTip = `<span class="status status-checked-in" style="margin-right:8px;">使用中</span>`;
             actions = `<button class="btn btn-primary" onclick="doCheckout(${b.id})">结束使用</button>`;
           }
           item.innerHTML = `
@@ -258,7 +288,10 @@
               <div class="seat">${b.seat_number} · ${b.zone}</div>
               <div class="time">${b.booking_date} ${b.hour_slot}:00-${b.hour_slot + 1}:00</div>
             </div>
-            <span class="status ${st.cls}">${st.text}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${statusTip}
+              <span class="status ${st.cls}">${st.text}</span>
+            </div>
             <div class="booking-actions">${actions}</div>
           `;
           container.appendChild(item);
@@ -318,6 +351,13 @@
         document.getElementById('userInfo').style.display = 'flex';
         document.getElementById('username').textContent = me.user.username;
 
+        const adminLink = document.getElementById('adminLink');
+        if (me.user.role === 'admin') {
+          adminLink.style.display = 'inline-block';
+        } else {
+          adminLink.style.display = 'none';
+        }
+
         const banBanner = document.getElementById('banBanner');
         if (banInfo?.banned) {
           banBanner.innerHTML = `<div class="ban-banner">⚠️ 您因爽约${banInfo.count}次已被禁约${banInfo.remainingHours}小时，期间无法预约新工位</div>`;
@@ -340,6 +380,7 @@
         };
 
         renderHourSlots();
+        updateBookBtn();
         loadBookings();
       } catch (err) {
         logout();

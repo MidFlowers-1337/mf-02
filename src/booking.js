@@ -98,8 +98,8 @@ function canUserBookSlot(userId, bookingDate, hourSlot, excludeBookingId = null)
 }
 
 function isSlotInPast(bookingDate, hourSlot) {
-  const start = getBookingStartTimestamp(bookingDate, hourSlot);
-  return Date.now() >= start;
+  const end = getBookingStartTimestamp(bookingDate, hourSlot) + 60 * 60 * 1000;
+  return Date.now() >= end;
 }
 
 function createBooking(userId, seatId, bookingDate, hourSlot) {
