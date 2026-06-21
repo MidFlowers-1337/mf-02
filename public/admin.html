@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>老板后台 - 自习室预约系统</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="header">
+    <div class="container">
+      <h1>📊 老板后台</h1>
+      <div class="user-info" id="userInfo" style="display: none;">
+        <span id="username"></span>
+        <a href="/" class="btn btn-secondary">学生端</a>
+        <button class="btn btn-secondary" onclick="logout()">退出</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="loginView" class="card auth-box">
+      <h2 style="text-align: center; margin-bottom: 20px;">管理员登录</h2>
+      <div id="alertBox"></div>
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="usernameInput" placeholder="请输入用户名">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="passwordInput" placeholder="请输入密码">
+      </div>
+      <button class="btn btn-primary" style="width: 100%;" onclick="doLogin()">登录</button>
+      <p style="margin-top: 15px; font-size: 12px; color: #718096; text-align: center;">
+        默认账号: admin / admin123
+      </p>
+    </div>
+
+    <div id="mainView" style="display: none;">
+      <div class="card">
+        <h2>📈 工位利用率统计</h2>
+        <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label>开始日期</label>
+            <input type="date" id="startDate">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label>结束日期</label>
+            <input type="date" id="endDate">
+          </div>
+          <div style="display: flex; align-items: flex-end;">
+            <button class="btn btn-primary" onclick="loadStats()">查询</button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="card stat-card">
+            <div class="stat-value" id="utilRate">0%</div>
+            <div class="stat-label">工位利用率</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-value" id="totalHours">0</div>
+            <div class="stat-label">实际使用小时</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-value" id="possibleHours">0</div>
+            <div class="stat-label">理论可用小时</div>
+          </div>
+        </div>
+
+        <h3 style="margin: 20px 0 10px;">🔥 热门时段</h3>
+        <table id="hourStatsTable">
+          <thead>
+            <tr><th>时段</th><th>使用次数</th><th>热度</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <h3 style="margin: 20px 0 10px;">📍 区域分布</h3>
+        <table id="zoneStatsTable">
+          <thead>
+            <tr><th>区域</th><th>使用次数</th><th>占比</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>👥 用户管理</h2>
+        <table id="usersTable">
+          <thead>
+            <tr><th>用户名</th><th>角色</th><th>近7天爽约</th><th>状态</th><th>注册时间</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>⚠️ 爽约记录</h2>
+        <table id="noShowsTable">
+          <thead>
+            <tr><th>用户</th><th>工位</th><th>日期</th><th>时段</th><th>记录时间</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>🪑 工位管理</h2>
+        <div style="margin-bottom: 15px;">
+          <button class="btn btn-primary" onclick="showAddSeatModal()">+ 添加工位</button>
+        </div>
+        <table id="seatsTable">
+          <thead>
+            <tr><th>编号</th><th>区域</th><th>有屏</th><th>靠窗</th><th>状态</th><th>操作</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>📋 预约记录</h2>
+        <table id="bookingsTable">
+          <thead>
+            <tr><th>用户</th><th>工位</th><th>日期</th><th>时段</th><th>状态</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="seatModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+    <div class="card" style="width: 100%; max-width: 400px;">
+      <h2 id="modalTitle">添加工位</h2>
+      <div id="modalAlert"></div>
+      <input type="hidden" id="editSeatId">
+      <div class="form-group">
+        <label>工位编号</label>
+        <input type="text" id="seatNumber">
+      </div>
+      <div class="form-group">
+        <label>区域</label>
+        <input type="text" id="seatZone">
+      </div>
+      <div class="form-group" style="display: flex; gap: 20px;">
+        <label><input type="checkbox" id="seatMonitor"> 有屏</label>
+        <label><input type="checkbox" id="seatWindow"> 靠窗</label>
+      </div>
+      <div class="form-group">
+        <label>状态</label>
+        <select id="seatStatus">
+          <option value="available">可预约</option>
+          <option value="maintenance">维护中</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn btn-secondary" style="flex: 1;" onclick="closeSeatModal()">取消</button>
+        <button class="btn btn-primary" style="flex: 1;" onclick="saveSeat()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    function showAlert(msg, type = 'error') {
+      const box = document.getElementById('alertBox') || document.getElementById('modalAlert');
+      if (box) {
+        box.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+        setTimeout(() => { box.innerHTML = ''; }, 3000);
+      }
+    }
+
+    function formatDate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts);
+      return d.toLocaleString('zh-CN');
+    }
+
+    async function doLogin() {
+      try {
+        const username = document.getElementById('usernameInput').value;
+        const password = document.getElementById('passwordInput').value;
+        const data = await api.auth.login(username, password);
+        if (data.user.role !== 'admin') {
+          api.auth.logout();
+          throw new Error('需要管理员账号');
+        }
+        api.setToken(data.token);
+        api.setUser(data.user);
+        showAlert('登录成功', 'success');
+        await initApp();
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
+    function logout() {
+      api.auth.logout();
+      document.getElementById('mainView').style.display = 'none';
+      document.getElementById('loginView').style.display = 'block';
+      document.getElementById('userInfo').style.display = 'none';
+    }
+
+    async function loadStats() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      try {
+        const stats = await api.admin.utilization(start, end);
+        document.getElementById('utilRate').textContent = stats.utilizationRate + '%';
+        document.getElementById('totalHours').textContent = stats.totalHours;
+        document.getElementById('possibleHours').textContent = stats.possibleHours;
+
+        const hourTbody = document.querySelector('#hourStatsTable tbody');
+        hourTbody.innerHTML = '';
+        const maxHour = Math.max(1, ...stats.hourStats.map(h => h.cnt));
+        for (const h of stats.hourStats) {
+          const pct = (h.cnt / maxHour * 100).toFixed(0);
+          hourTbody.innerHTML += `
+            <tr>
+              <td>${h.hour_slot}:00-${h.hour_slot + 1}:00</td>
+              <td>${h.cnt} 次</td>
+              <td>
+                <div style="background: #e2e8f0; border-radius: 4px; height: 20px; width: 100px;">
+                  <div style="background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; width: ${pct}%; border-radius: 4px;"></div>
+                </div>
+              </td>
+            </tr>
+          `;
+        }
+
+        const zoneTbody = document.querySelector('#zoneStatsTable tbody');
+        zoneTbody.innerHTML = '';
+        const totalZone = stats.zoneStats.reduce((s, z) => s + z.cnt, 0);
+        for (const z of stats.zoneStats) {
+          const pct = totalZone > 0 ? (z.cnt / totalZone * 100).toFixed(1) : 0;
+          zoneTbody.innerHTML += `
+            <tr>
+              <td>${z.zone}</td>
+              <td>${z.cnt} 次</td>
+              <td>${pct}%</td>
+            </tr>
+          `;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const users = await api.admin.users();
+        const tbody = document.querySelector('#usersTable tbody');
+        tbody.innerHTML = '';
+        for (const u of users) {
+          const status = u.banInfo.banned
+            ? `<span class="status status-no-show">禁约中 (${u.banInfo.remainingHours}h)</span>`
+            : `<span class="status status-completed">正常</span>`;
+          tbody.innerHTML += `
+            <tr>
+              <td>${u.username}</td>
+              <td>${u.role === 'admin' ? '管理员' : '学生'}</td>
+              <td>${u.noShowCount} 次</td>
+              <td>${status}</td>
+              <td>${formatTime(u.created_at)}</td>
+            </tr>
+          `;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadNoShows() {
+      try {
+        const records = await api.admin.noShows();
+        const tbody = document.querySelector('#noShowsTable tbody');
+        tbody.innerHTML = '';
+        for (const r of records) {
+          tbody.innerHTML += `
+            <tr>
+              <td>${r.username}</td>
+              <td>${r.seat_number}</td>
+              <td>${r.booking_date}</td>
+              <td>${r.hour_slot}:00-${r.hour_slot + 1}:00</td>
+              <td>${formatTime(r.created_at)}</td>
+            </tr>
+          `;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadSeats() {
+      try {
+        const seats = await api.seats.list();
+        const tbody = document.querySelector('#seatsTable tbody');
+        tbody.innerHTML = '';
+        for (const s of seats) {
+          const statusCls = s.status === 'available' ? 'status-completed' : 'status-no-show';
+          const statusText = s.status === 'available' ? '可预约' : '维护中';
+          tbody.innerHTML += `
+            <tr>
+              <td>${s.seat_number}</td>
+              <td>${s.zone}</td>
+              <td>${s.has_monitor ? '✓' : '-'}</td>
+              <td>${s.by_window ? '✓' : '-'}</td>
+              <td><span class="status ${statusCls}">${statusText}</span></td>
+              <td>
+                <button class="btn btn-secondary" onclick="editSeat(${s.id})">编辑</button>
+              </td>
+            </tr>
+          `;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadBookings() {
+      try {
+        const bookings = await api.admin.bookings();
+        const tbody = document.querySelector('#bookingsTable tbody');
+        tbody.innerHTML = '';
+        for (const b of bookings.slice(0, 50)) {
+          const st = {
+            'reserved': { text: '已预约', cls: 'status-reserved' },
+            'checked-in': { text: '使用中', cls: 'status-checked-in' },
+            'completed': { text: '已完成', cls: 'status-completed' },
+            'no-show': { text: '爽约', cls: 'status-no-show' },
+            'cancelled': { text: '已取消', cls: 'status-cancelled' },
+          }[b.status] || { text: b.status, cls: '' };
+          tbody.innerHTML += `
+            <tr>
+              <td>${b.username}</td>
+              <td>${b.seat_number}</td>
+              <td>${b.booking_date}</td>
+              <td>${b.hour_slot}:00-${b.hour_slot + 1}:00</td>
+              <td><span class="status ${st.cls}">${st.text}</span></td>
+            </tr>
+          `;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function showAddSeatModal() {
+      document.getElementById('modalTitle').textContent = '添加工位';
+      document.getElementById('editSeatId').value = '';
+      document.getElementById('seatNumber').value = '';
+      document.getElementById('seatZone').value = '';
+      document.getElementById('seatMonitor').checked = false;
+      document.getElementById('seatWindow').checked = false;
+      document.getElementById('seatStatus').value = 'available';
+      document.getElementById('seatModal').style.display = 'flex';
+    }
+
+    async function editSeat(id) {
+      try {
+        const seat = await api.seats.get(id);
+        document.getElementById('modalTitle').textContent = '编辑工位';
+        document.getElementById('editSeatId').value = seat.id;
+        document.getElementById('seatNumber').value = seat.seat_number;
+        document.getElementById('seatZone').value = seat.zone;
+        document.getElementById('seatMonitor').checked = !!seat.has_monitor;
+        document.getElementById('seatWindow').checked = !!seat.by_window;
+        document.getElementById('seatStatus').value = seat.status;
+        document.getElementById('seatModal').style.display = 'flex';
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
+    function closeSeatModal() {
+      document.getElementById('seatModal').style.display = 'none';
+    }
+
+    async function saveSeat() {
+      const id = document.getElementById('editSeatId').value;
+      const data = {
+        seat_number: document.getElementById('seatNumber').value,
+        zone: document.getElementById('seatZone').value,
+        has_monitor: document.getElementById('seatMonitor').checked,
+        by_window: document.getElementById('seatWindow').checked,
+        status: document.getElementById('seatStatus').value,
+      };
+      try {
+        if (id) {
+          await api.seats.update(id, data);
+          showAlert('更新成功', 'success');
+        } else {
+          await api.seats.create(data);
+          showAlert('添加成功', 'success');
+        }
+        closeSeatModal();
+        loadSeats();
+      } catch (err) {
+        document.getElementById('modalAlert').innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+      }
+    }
+
+    async function initApp() {
+      const user = api.getUser();
+      if (!user || !api.getToken() || user.role !== 'admin') {
+        document.getElementById('loginView').style.display = 'block';
+        document.getElementById('mainView').style.display = 'none';
+        return;
+      }
+      try {
+        const me = await api.auth.me();
+        if (me.user.role !== 'admin') {
+          logout();
+          return;
+        }
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('mainView').style.display = 'block';
+        document.getElementById('userInfo').style.display = 'flex';
+        document.getElementById('username').textContent = me.user.username;
+
+        const today = new Date();
+        const start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        document.getElementById('startDate').value = formatDate(start);
+        document.getElementById('endDate').value = formatDate(today);
+
+        document.getElementById('startDate').onchange = loadStats;
+        document.getElementById('endDate').onchange = loadStats;
+
+        loadStats();
+        loadUsers();
+        loadNoShows();
+        loadSeats();
+        loadBookings();
+      } catch (err) {
+        logout();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>

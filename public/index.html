@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自习室工位预约</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="header">
+    <div class="container">
+      <h1>📚 自习室工位预约</h1>
+      <div class="user-info" id="userInfo" style="display: none;">
+        <span id="username"></span>
+        <button class="btn btn-secondary" onclick="logout()">退出</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="authView">
+      <div class="card auth-box">
+        <div class="tabs">
+          <div class="tab active" data-tab="login" onclick="switchTab('login')">登录</div>
+          <div class="tab" data-tab="register" onclick="switchTab('register')">注册</div>
+        </div>
+        <div id="alertBox"></div>
+        <div id="loginForm">
+          <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="loginUsername" placeholder="请输入用户名">
+          </div>
+          <div class="form-group">
+            <label>密码</label>
+            <input type="password" id="loginPassword" placeholder="请输入密码">
+          </div>
+          <button class="btn btn-primary" style="width: 100%;" onclick="doLogin()">登录</button>
+        </div>
+        <div id="registerForm" style="display: none;">
+          <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="regUsername" placeholder="请输入用户名">
+          </div>
+          <div class="form-group">
+            <label>密码（至少6位）</label>
+            <input type="password" id="regPassword" placeholder="请输入密码">
+          </div>
+          <button class="btn btn-primary" style="width: 100%;" onclick="doRegister()">注册</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mainView" style="display: none;">
+      <div id="banBanner"></div>
+
+      <div class="card">
+        <h2>📅 预约工位</h2>
+        <div class="form-group">
+          <label>选择日期</label>
+          <input type="date" id="bookingDate">
+        </div>
+        <div class="form-group">
+          <label>选择时段</label>
+          <div class="hour-slots" id="hourSlots"></div>
+        </div>
+        <h3 style="margin-bottom: 10px;">选择工位</h3>
+        <div class="grid grid-seats" id="seatGrid"></div>
+        <div style="margin-top: 15px;">
+          <button class="btn btn-primary" id="bookBtn" onclick="doBook()" disabled>确认预约</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📋 我的预约</h2>
+        <div class="booking-list" id="bookingList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let selectedHour = null;
+    let selectedSeatId = null;
+    let currentDate = null;
+    let banInfo = null;
+
+    function showAlert(msg, type = 'error') {
+      const box = document.getElementById('alertBox');
+      box.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+      setTimeout(() => { box.innerHTML = ''; }, 3000);
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+      document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
+    }
+
+    async function doLogin() {
+      try {
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+        const data = await api.auth.login(username, password);
+        api.setToken(data.token);
+        api.setUser(data.user);
+        showAlert('登录成功', 'success');
+        await initApp();
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
+    async function doRegister() {
+      try {
+        const username = document.getElementById('regUsername').value;
+        const password = document.getElementById('regPassword').value;
+        const data = await api.auth.register(username, password);
+        api.setToken(data.token);
+        api.setUser(data.user);
+        showAlert('注册成功', 'success');
+        await initApp();
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
+    function logout() {
+      api.auth.logout();
+      document.getElementById('mainView').style.display = 'none';
+      document.getElementById('authView').style.display = 'block';
+      document.getElementById('userInfo').style.display = 'none';
+    }
+
+    function formatDate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function renderHourSlots() {
+      const container = document.getElementById('hourSlots');
+      container.innerHTML = '';
+      const now = new Date();
+      const today = formatDate(now);
+      for (let h = 8; h <= 21; h++) {
+        const isPast = currentDate === today && h <= now.getHours();
+        const div = document.createElement('div');
+        div.className = `hour-slot${isPast ? ' past' : ''}${selectedHour === h ? ' selected' : ''}`;
+        div.textContent = `${h}:00-${h + 1}:00`;
+        if (!isPast && !banInfo?.banned) {
+          div.onclick = () => selectHour(h);
+        }
+        container.appendChild(div);
+      }
+    }
+
+    function selectHour(h) {
+      selectedHour = h;
+      renderHourSlots();
+      if (currentDate) loadSeats();
+    }
+
+    async function loadSeats() {
+      if (!currentDate || selectedHour === null) return;
+      try {
+        const seats = await api.seats.availability(currentDate, selectedHour);
+        const container = document.getElementById('seatGrid');
+        container.innerHTML = '';
+        selectedSeatId = null;
+        updateBookBtn();
+        for (const s of seats) {
+          const div = document.createElement('div');
+          let cls = 'seat-card';
+          if (s.status !== 'available') cls += ' maintenance';
+          else if (s.is_booked) cls += ' booked';
+          else if (selectedSeatId === s.id) cls += ' selected';
+          div.className = cls;
+          let tags = '';
+          if (s.status !== 'available') tags += '<span class="tag tag-maintenance">维护中</span>';
+          if (s.has_monitor) tags += '<span class="tag tag-monitor">有屏</span>';
+          if (s.by_window) tags += '<span class="tag tag-window">靠窗</span>';
+          div.innerHTML = `
+            <div class="seat-number">${s.seat_number}</div>
+            <div class="seat-zone">${s.zone}</div>
+            <div class="seat-tags">${tags}</div>
+          `;
+          if (s.status === 'available' && !s.is_booked && !banInfo?.banned) {
+            div.onclick = () => selectSeat(s.id);
+          }
+          container.appendChild(div);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function selectSeat(id) {
+      selectedSeatId = id;
+      loadSeats();
+      updateBookBtn();
+    }
+
+    function updateBookBtn() {
+      const btn = document.getElementById('bookBtn');
+      btn.disabled = !selectedSeatId || !currentDate || selectedHour === null || banInfo?.banned;
+    }
+
+    async function doBook() {
+      if (!selectedSeatId || !currentDate || selectedHour === null) return;
+      try {
+        await api.bookings.create(selectedSeatId, currentDate, selectedHour);
+        showAlert('预约成功！', 'success');
+        selectedSeatId = null;
+        loadSeats();
+        loadBookings();
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
+    function getStatusText(status) {
+      const map = {
+        'reserved': { text: '已预约', cls: 'status-reserved' },
+        'checked-in': { text: '使用中', cls: 'status-checked-in' },
+        'completed': { text: '已完成', cls: 'status-completed' },
+        'no-show': { text: '爽约', cls: 'status-no-show' },
+        'cancelled': { text: '已取消', cls: 'status-cancelled' },
+      };
+      return map[status] || { text: status, cls: '' };
+    }
+
+    async function loadBookings() {
+      try {
+        const bookings = await api.bookings.list();
+        const container = document.getElementById('bookingList');
+        if (bookings.length === 0) {
+          container.innerHTML = '<p style="color: #718096; text-align: center; padding: 20px;">暂无预约记录</p>';
+          return;
+        }
+        container.innerHTML = '';
+        for (const b of bookings) {
+          const st = getStatusText(b.status);
+          const item = document.createElement('div');
+          item.className = 'booking-item';
+          let actions = '';
+          if (b.status === 'reserved') {
+            actions = `
+              <button class="btn btn-success" onclick="doCheckin(${b.id})">签到</button>
+              <button class="btn btn-secondary" onclick="doCancel(${b.id})">取消</button>
+            `;
+          } else if (b.status === 'checked-in') {
+            actions = `<button class="btn btn-primary" onclick="doCheckout(${b.id})">结束使用</button>`;
+          }
+          item.innerHTML = `
+            <div class="booking-info">
+              <div class="seat">${b.seat_number} · ${b.zone}</div>
+              <div class="time">${b.booking_date} ${b.hour_slot}:00-${b.hour_slot + 1}:00</div>
+            </div>
+            <span class="status ${st.cls}">${st.text}</span>
+            <div class="booking-actions">${actions}</div>
+          `;
+          container.appendChild(item);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function doCheckin(id) {
+      try {
+        await api.bookings.checkin(id);
+        showAlert('签到成功！', 'success');
+        loadBookings();
+        loadSeats();
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
+    async function doCheckout(id) {
+      try {
+        await api.bookings.checkout(id);
+        showAlert('已结束使用', 'success');
+        loadBookings();
+        loadSeats();
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
+    async function doCancel(id) {
+      if (!confirm('确定取消预约吗？')) return;
+      try {
+        await api.bookings.cancel(id);
+        showAlert('已取消', 'success');
+        loadBookings();
+        loadSeats();
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
+    async function initApp() {
+      const user = api.getUser();
+      if (!user || !api.getToken()) {
+        document.getElementById('authView').style.display = 'block';
+        document.getElementById('mainView').style.display = 'none';
+        return;
+      }
+      try {
+        const me = await api.auth.me();
+        banInfo = me.ban;
+        api.setUser(me.user);
+        document.getElementById('authView').style.display = 'none';
+        document.getElementById('mainView').style.display = 'block';
+        document.getElementById('userInfo').style.display = 'flex';
+        document.getElementById('username').textContent = me.user.username;
+
+        const banBanner = document.getElementById('banBanner');
+        if (banInfo?.banned) {
+          banBanner.innerHTML = `<div class="ban-banner">⚠️ 您因爽约${banInfo.count}次已被禁约${banInfo.remainingHours}小时，期间无法预约新工位</div>`;
+        } else {
+          banBanner.innerHTML = '';
+        }
+
+        const dateInput = document.getElementById('bookingDate');
+        const today = new Date();
+        currentDate = formatDate(today);
+        dateInput.value = currentDate;
+        dateInput.min = currentDate;
+        dateInput.onchange = (e) => {
+          currentDate = e.target.value;
+          selectedHour = null;
+          selectedSeatId = null;
+          renderHourSlots();
+          loadSeats();
+          updateBookBtn();
+        };
+
+        renderHourSlots();
+        loadBookings();
+      } catch (err) {
+        logout();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initApp);
+    setInterval(loadBookings, 30000);
+  </script>
+</body>
+</html>
