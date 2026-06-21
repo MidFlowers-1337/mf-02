@@ -12,6 +12,16 @@ initDb();
 const app = new Koa();
 
 app.use(async (ctx, next) => {
+  try {
+    await next();
+  } catch (err) {
+    console.error('[Error]', err.message, err.stack);
+    ctx.status = err.statusCode || err.status || 500;
+    ctx.body = { error: err.message || '服务器内部错误' };
+  }
+});
+
+app.use(async (ctx, next) => {
   ctx.set('Access-Control-Allow-Origin', '*');
   ctx.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   ctx.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');

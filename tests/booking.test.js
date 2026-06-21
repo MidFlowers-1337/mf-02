@@ -160,11 +160,12 @@ test('签到功能正常 - 在时间范围内', () => {
   if (hour > 21) hour = 21;
 
   const startTs = booking.getBookingStartTimestamp(booking.formatDate(now), hour);
+  const earlyStart = startTs - 5 * 60 * 1000;
   const graceEnd = startTs + 15 * 60 * 1000;
   const nowTs = Date.now();
 
   let b;
-  if (nowTs >= startTs && nowTs <= graceEnd) {
+  if (nowTs >= earlyStart && nowTs <= graceEnd) {
     b = insertBooking(db, userId, 1, booking.formatDate(now), hour, 'reserved');
     const checked = booking.checkin(b.id, userId);
     assert.equal(checked.status, 'checked-in');
@@ -176,15 +177,31 @@ test('签到功能正常 - 在时间范围内', () => {
   }
 });
 
-test('签到功能 - 提前不能签', () => {
+test('签到功能 - 提前超过5分钟不能签，提前5分钟内可以签', () => {
   const db = resetDb();
   const userId = createTestUser(db);
-  const futureDate = getFutureDate(1);
 
-  const b = booking.createBooking(userId, 1, futureDate, 10);
+  const farFuture = getFutureDate(1);
+  const b1 = booking.createBooking(userId, 1, farFuture, 10);
   assert.throws(() => {
-    booking.checkin(b.id, userId);
+    booking.checkin(b1.id, userId);
   }, /还未到签到时间/);
+  assert.ok(true, '提前超过5分钟签到被正确拒绝');
+
+  const now = new Date();
+  const dateStr = booking.formatDate(now);
+  let hour = now.getHours();
+  if (hour < 8) hour = 8;
+  if (hour > 21) hour = 21;
+
+  const startTs = booking.getBookingStartTimestamp(dateStr, hour);
+  const nowTs = Date.now();
+  if (nowTs >= startTs - 5 * 60 * 1000 && nowTs <= startTs + 15 * 60 * 1000) {
+    const b2 = insertBooking(db, userId, 2, dateStr, hour, 'reserved');
+    const checked = booking.checkin(b2.id, userId);
+    assert.equal(checked.status, 'checked-in');
+    assert.ok(true, '提前5分钟内签到成功');
+  }
 });
 
 test('签到功能 - 超过15分钟不能签并标记爽约', () => {
@@ -217,10 +234,11 @@ test('结束使用功能', () => {
   if (hour > 21) hour = 21;
 
   const startTs = booking.getBookingStartTimestamp(booking.formatDate(now), hour);
+  const earlyStart = startTs - 5 * 60 * 1000;
   const graceEnd = startTs + 15 * 60 * 1000;
   const nowTs = Date.now();
 
-  if (nowTs >= startTs && nowTs <= graceEnd) {
+  if (nowTs >= earlyStart && nowTs <= graceEnd) {
     const b = insertBooking(db, userId, 1, booking.formatDate(now), hour, 'reserved');
     booking.checkin(b.id, userId);
     const finished = booking.checkout(b.id, userId);

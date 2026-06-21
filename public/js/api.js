@@ -60,6 +60,7 @@ const api = {
     get: (id) => request(`/seats/${id}`),
     create: (data) => request('/seats', { method: 'POST', body: JSON.stringify(data) }),
     update: (id, data) => request(`/seats/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    remove: (id) => request(`/seats/${id}`, { method: 'DELETE' }),
     availability: (date, hour) => request(`/seats/availability/${date}/${hour}`),
   },
   bookings: {

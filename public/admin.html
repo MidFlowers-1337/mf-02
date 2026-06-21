@@ -68,18 +68,21 @@
           </div>
         </div>
 
-        <h3 style="margin: 20px 0 10px;">🔥 热门时段</h3>
+        <h3 style="margin: 20px 0 10px;">🔥 热门时段排名</h3>
+        <div id="hourChartContainer" style="margin-bottom: 20px; padding: 15px; background: #f7fafc; border-radius: 8px;">
+          <div id="hourBarChart" style="display: flex; align-items: flex-end; gap: 8px; height: 180px; padding: 10px 0;"></div>
+        </div>
         <table id="hourStatsTable">
           <thead>
-            <tr><th>时段</th><th>使用次数</th><th>热度</th></tr>
+            <tr><th>排名</th><th>时段</th><th>使用次数</th><th>热度对比</th></tr>
           </thead>
           <tbody></tbody>
         </table>
 
-        <h3 style="margin: 20px 0 10px;">📍 区域分布</h3>
+        <h3 style="margin: 20px 0 10px;">📍 区域分布排名</h3>
         <table id="zoneStatsTable">
           <thead>
-            <tr><th>区域</th><th>使用次数</th><th>占比</th></tr>
+            <tr><th>排名</th><th>区域</th><th>使用次数</th><th>占比</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -130,7 +133,7 @@
     </div>
   </div>
 
-  <div id="seatModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+  <div id="seatModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
     <div class="card" style="width: 100%; max-width: 400px;">
       <h2 id="modalTitle">添加工位</h2>
       <div id="modalAlert"></div>
@@ -217,18 +220,44 @@
         document.getElementById('totalHours').textContent = stats.totalHours;
         document.getElementById('possibleHours').textContent = stats.possibleHours;
 
+        const rankColors = ['#fbbf24', '#9ca3af', '#cd7f32', '#667eea', '#667eea', '#667eea'];
+        const rankMedals = ['🥇', '🥈', '🥉'];
+
         const hourTbody = document.querySelector('#hourStatsTable tbody');
         hourTbody.innerHTML = '';
         const maxHour = Math.max(1, ...stats.hourStats.map(h => h.cnt));
-        for (const h of stats.hourStats) {
+
+        const barChart = document.getElementById('hourBarChart');
+        barChart.innerHTML = '';
+        const topHours = stats.hourStats.slice(0, 10);
+        for (let i = 0; i < topHours.length; i++) {
+          const h = topHours[i];
           const pct = (h.cnt / maxHour * 100).toFixed(0);
+          const color = rankColors[i] || '#667eea';
+          const bar = document.createElement('div');
+          bar.style.cssText = `flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0;`;
+          bar.innerHTML = `
+            <div style="font-weight: bold; color: ${color}; font-size: 12px;">${h.cnt}</div>
+            <div style="width: 100%; background: ${color}; border-radius: 4px 4px 0 0; height: ${Math.max(20, pct * 1.5)}px;"></div>
+            <div style="font-size: 10px; color: #718096; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${h.hour_slot}-${h.hour_slot + 1}</div>
+          `;
+          barChart.appendChild(bar);
+        }
+
+        for (let i = 0; i < stats.hourStats.length; i++) {
+          const h = stats.hourStats[i];
+          const pct = (h.cnt / maxHour * 100).toFixed(0);
+          const rankText = i < 3 ? `${rankMedals[i]} 第${i + 1}名` : `&nbsp;&nbsp;第${i + 1}名`;
+          const color = rankColors[i] || '#667eea';
           hourTbody.innerHTML += `
             <tr>
+              <td style="font-weight: bold; color: ${color};">${rankText}</td>
               <td>${h.hour_slot}:00-${h.hour_slot + 1}:00</td>
               <td>${h.cnt} 次</td>
               <td>
-                <div style="background: #e2e8f0; border-radius: 4px; height: 20px; width: 100px;">
-                  <div style="background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; width: ${pct}%; border-radius: 4px;"></div>
+                <div style="background: #e2e8f0; border-radius: 4px; height: 20px; width: 150px; position: relative;">
+                  <div style="background: linear-gradient(90deg, ${color}, ${color}dd); height: 100%; width: ${pct}%; border-radius: 4px;"></div>
+                  <span style="position: absolute; right: 5px; top: 0; font-size: 11px; line-height: 20px; color: #4a5568;">${pct}%</span>
                 </div>
               </td>
             </tr>
@@ -238,10 +267,14 @@
         const zoneTbody = document.querySelector('#zoneStatsTable tbody');
         zoneTbody.innerHTML = '';
         const totalZone = stats.zoneStats.reduce((s, z) => s + z.cnt, 0);
-        for (const z of stats.zoneStats) {
+        for (let i = 0; i < stats.zoneStats.length; i++) {
+          const z = stats.zoneStats[i];
           const pct = totalZone > 0 ? (z.cnt / totalZone * 100).toFixed(1) : 0;
+          const rankText = i < 3 ? `${rankMedals[i]} 第${i + 1}名` : `&nbsp;&nbsp;第${i + 1}名`;
+          const color = rankColors[i] || '#667eea';
           zoneTbody.innerHTML += `
             <tr>
+              <td style="font-weight: bold; color: ${color};">${rankText}</td>
               <td>${z.zone}</td>
               <td>${z.cnt} 次</td>
               <td>${pct}%</td>
@@ -298,6 +331,17 @@
       }
     }
 
+    async function deleteSeat(id, seatNumber) {
+      if (!confirm(`确定删除工位 ${seatNumber} 吗？相关的历史预约记录也会被删除。`)) return;
+      try {
+        await api.seats.remove(id);
+        showAlert('删除成功', 'success');
+        loadSeats();
+      } catch (err) {
+        showAlert(err.message);
+      }
+    }
+
     async function loadSeats() {
       try {
         const seats = await api.seats.list();
@@ -315,6 +359,7 @@
               <td><span class="status ${statusCls}">${statusText}</span></td>
               <td>
                 <button class="btn btn-secondary" onclick="editSeat(${s.id})">编辑</button>
+                <button class="btn btn-danger" onclick="deleteSeat(${s.id}, '${s.seat_number}')">删除</button>
               </td>
             </tr>
           `;

@@ -4,6 +4,7 @@ function getDb() {
 }
 
 const CHECKIN_GRACE_MINUTES = 15;
+const CHECKIN_EARLY_MINUTES = 5;
 const NO_SHOW_THRESHOLD = 3;
 const BAN_DAYS = 7;
 
@@ -147,14 +148,16 @@ function checkin(bookingId, userId) {
     throw new Error('预约已爽约');
   }
   const startTs = getBookingStartTimestamp(booking.booking_date, booking.hour_slot);
+  const earlyStart = startTs - CHECKIN_EARLY_MINUTES * 60 * 1000;
   const graceEnd = startTs + CHECKIN_GRACE_MINUTES * 60 * 1000;
   const now = Date.now();
-  if (now < startTs) {
-    throw new Error('还未到签到时间');
+  if (now < earlyStart) {
+    const mins = Math.ceil((earlyStart - now) / 60000);
+    throw new Error(`还未到签到时间，可提前 ${CHECKIN_EARLY_MINUTES} 分钟签到，还需等待 ${mins} 分钟`);
   }
   if (now > graceEnd) {
     markNoShow(bookingId);
-    throw new Error('已超过签到时间，预约已取消');
+    throw new Error('已超过签到时间（开始后15分钟），预约已自动取消');
   }
   getDb().prepare(`
     UPDATE bookings SET status = 'checked-in', checkin_at = ?
@@ -269,6 +272,7 @@ function getUtilizationStats(startDate, endDate) {
 
 module.exports = {
   CHECKIN_GRACE_MINUTES,
+  CHECKIN_EARLY_MINUTES,
   NO_SHOW_THRESHOLD,
   BAN_DAYS,
   formatDate,
